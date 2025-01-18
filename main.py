@@ -4,16 +4,17 @@ import csv
 import os
 import numpy as np
 import cv2
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import zmq
 from piezo import Piezo
 from fit import fit_coords
+import tkinter as tk
+from tkinter import simpledialog
 
 ################ Constants ###########
-WINDOW_NAME = 'Ablation (Press Q to exit, Esc to cancel PID, L to load CSV)'
+WINDOW_NAME = 'AblateMate (Press Q to exit, ? for command list)'
 PIEZO_SCALE = 30 # steps per pixel (40 nominal)
 ROI_RADIUS = 40 # Radius in pixels for centroid fit
-THRESHOLD = 190000 #MOT Count threshold for what is a good/bad spot. I.e if MOT counts are below threshold for 2 shots, move
 RESOLUTION = 16 # Resolution of the grid on the ablation target
 ######################################
 
@@ -23,6 +24,10 @@ logFlag = 0 # initialize the flag of whether to log a new shot as zero
 ## Init random walker
 np.random.seed(int(time.time())) #initialize the 
 r1 = np.random.rand()
+threshold = 190000 #MOT Count threshold for what is a good/bad spot. I.e if MOT counts are below threshold for 2 shots, move
+warning_number = 2
+do_move = False
+help_mode = True
 
 ##############################################
 # CALIBRATION COEFFICIENTS
@@ -37,6 +42,45 @@ bottom = (200.4, 199.4)
 MOTLogFile = "MOTLog.npy"
 ShotLogFile = "shotLog.npy"
 heat_map_mode = False
+
+##################################################################
+#################### Settings window ############################
+def open_settings_window():
+    def save_settings():
+        nonlocal settings
+        # Collect values from the entry boxes
+        settings = [entry.get() for entry in entries]
+        print("Settings saved!")
+        root.quit()  # Close the settings window
+
+    settings = []
+    root = tk.Tk()
+    root.title("Settings")
+
+    # Example settings labels
+    settings_labels = ["Low Threshold", "# of Shots Below Threshold Allowed", "MOT Log Save Filepath", "Shot Log Save Filepath"]
+
+    # Create a list to hold entry widgets
+    entries = []
+
+    for label_text in settings_labels:
+        frame = tk.Frame(root)
+        frame.pack(padx=10, pady=5)
+
+        label = tk.Label(frame, text=label_text)
+        label.pack(side=tk.LEFT)
+
+        entry = tk.Entry(frame)
+        entry.pack(side=tk.LEFT)
+        entries.append(entry)
+
+    # Add a Save button
+    save_button = tk.Button(root, text="Save", command=save_settings)
+    save_button.pack(pady=10)
+
+    root.mainloop()
+    root.destroy()
+    return settings
 
 
 #######################################################
@@ -243,24 +287,36 @@ while True:
         target_x, target_y = None, None
 
     # Draw target queue from CSV
-    if csv_x is not None:
+    if csv_x is not None and not autoMode:
         autoMode = False
         for xx, yy in zip(csv_x, csv_y):
             cv2.circle(info_display, (round(xx), round(yy)), 1, (255, 0, 255), 2)
         dt = csv_dur[csv_idx] - (time.monotonic() - last_csv)
         cv2.putText(info_display, f'{dt:.2f} s', (10, 30), font, 0.6, (255, 0, 255), 1, cv2.LINE_AA)
-
-    
+    elif csv_x is not None:
+        for xx, yy in zip(csv_x, csv_y):
+            cv2.circle(info_display, (round(xx), round(yy)), 1, (255, 0, 255), 2)
+        dt = csv_dur[csv_idx] - (time.monotonic() - last_csv)
+        #cv2.putText(info_display, f'{dt:.2f} s', (10, 30), font, 0.6, (255, 0, 255), 1, cv2.LINE_AA)
+        
+    if help_mode:
+        cv2.putText(cropped, "q: Quit", (10, 110), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
+        cv2.putText(cropped, "s: Open Settings", (10, 145), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
+        cv2.putText(cropped, "esc: Disable piezo feedback", (10, 180), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
+        cv2.putText(cropped, "z: Enable auto Mode", (100, 110), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
+        cv2.putText(cropped, "h: Toggle heat map", (100, 145), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
+        cv2.putText(cropped, "l: Load raster CSV", (100, 180), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
+        cv2.putText(cropped, "?: Toggle these help instructions!", (10, 215), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
 
     # Auto mode
     if autoMode:
         cv2.putText(cropped, "AutoConnor Active", (8, 300), font, 1, (0, 0, 255), 1, cv2.LINE_AA)
         if newShot: #If there is new mot data
             if logFlag > 1: # If you have been on the spot for more than one shot
-                if MOTCounts < THRESHOLD: # If the counts are below threshold
-                    if warning == False: # If there is no warning flag
-                        warning = True # Set the warning flag to true
-                    else: #Since the warning flag was true and you were below threshold, move the spot
+                if MOTCounts < threshold: # If the counts are below threshold
+                    if warning < warning_number: # If there is no warning flag
+                        warning +=1 # Set the warning flag to true
+                    elif csv_x is None: #Since the warning flag was true and you were below threshold, move the spot
                 #The below block generates a new coordinate, and checks that the coordinate is inside the allowed region. If it is not, it tries again until an allowed coordinate is found
                         validation_bool = False
                         while not validation_bool: 
@@ -274,11 +330,14 @@ while True:
                             dest_y = target_y + 16*np.sin(2*np.pi*r1)
                             if 0 < dest_x and dest_x < h and 0 < dest_y and dest_y <h:
                                 validation_bool = True
+                    else:
+                        do_move = True
                 else:
-                    warning = False # If you are above threshold, turn the warning off
+                    warning = 0 # If you are above threshold, turn the warning off
             else:
-                warning = False #If the spot has moved, turn the warning off
-                        
+                warning = 0 #If the spot has moved, turn the warning off
+
+
 
     # Draw current destination
     if dest_x is not None:
@@ -380,11 +439,27 @@ while True:
         else:
             heat_map_mode = True
     
+
+    #If you push s, open the settings window
+    elif key ==ord('s'):
+        returned_settings = open_settings_window()
+        threshold = int(returned_settings[0])
+        warning_number = int(returned_settings[1])
+        MOTLogFile = str(returned_settings[2])
+        ShotLogFile = str(returned_settings[3])
+
+    elif key == ord('?'):
+        if help_mode == False:
+            help_mode = True
+        else:
+            help_mode = False
+    
+
+
     #If you push escape, disable any destination locking, autoMove, rastering, etc.
     elif key == 27: # Esc
         dest_x = None
         dest_y = None
-    
         csv_x = None
         csv_y = None
         csv_dur = None
@@ -442,11 +517,18 @@ while True:
                     plot_img = convert_plot_for_CV(mot_grid/shot_grid)
 
     # Update target from CSV
-    if csv_x is not None and time.monotonic() - last_csv > csv_dur[csv_idx]:
+    if csv_x is not None and time.monotonic() - last_csv > csv_dur[csv_idx] and not autoMode:
         csv_idx = (csv_idx + 1) % len(csv_x)
         dest_x = csv_x[csv_idx]
         dest_y = csv_y[csv_idx]
         last_csv = time.monotonic()
+    elif csv_x is not None and autoMode and do_move == True:
+        csv_idx = (csv_idx + 1) % len(csv_x)
+        dest_x = csv_x[csv_idx]
+        dest_y = csv_y[csv_idx]
+        last_csv = time.monotonic()
+        do_move = False
+
     if counter == 10000:
         counter = 0
         save_grid(MOTLogFile, mot_grid)
