@@ -136,8 +136,9 @@ def convert_plot_for_CV(grid):
 ### ZMQ Socket for recieving MOT Count data
 port = '55555'
 context = zmq.Context()
-socket = context.socket(zmq.PULL)
+socket = context.socket(zmq.SUB)
 socket.connect("tcp://localhost:48766")
+socket.subscribe.setsocopt_string(zmq.SUBSCRIBE, "")
 ####################################################
 
 
