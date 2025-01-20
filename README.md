@@ -17,5 +17,7 @@ Tired of turning the knob on your ablation laser to keep molecule loading high? 
   - z: Toggles AutoConnor assistant
   - esc: Disable piezo movement
   - q: Quit software
+  - ?: Toggle instruction visibility
+  - s: Open settings menu
 
 ## More documentatnion coming soon!
