@@ -425,7 +425,10 @@ while True:
                 print(f'Error reading {file}:', e)
 
     elif key == ord('n'):
-        last_csv = 0 #If you push n, skip to the next point in the csv file
+        if autoMode == False:
+            last_csv = 0 #If you push n, skip to the next point in the csv file
+        else:
+            do_move = True # If automode is on, allow manual override to next spot with n key
     
     #If you push z, activate auto mode
     elif key ==ord('z'):
