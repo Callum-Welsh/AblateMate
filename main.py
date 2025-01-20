@@ -51,6 +51,7 @@ def open_settings_window():
         # Collect values from the entry boxes
         settings = [entry.get() for entry in entries]
         print("Settings saved!")
+        print(settings)
         root.quit()  # Close the settings window
 
     settings = []
@@ -59,20 +60,21 @@ def open_settings_window():
 
     # Example settings labels
     settings_labels = ["Low Threshold", "# of Shots Below Threshold Allowed", "MOT Log Save Filepath", "Shot Log Save Filepath"]
-
+    defaults = [threshold, warning_number, MOTLogFile, ShotLogFile]
     # Create a list to hold entry widgets
     entries = []
 
-    for label_text in settings_labels:
+    for i in range(0,len(settings_labels)):
         frame = tk.Frame(root)
         frame.pack(padx=10, pady=5)
 
-        label = tk.Label(frame, text=label_text)
+        label = tk.Label(frame, text=settings_labels[i])
         label.pack(side=tk.LEFT)
 
         entry = tk.Entry(frame)
         entry.pack(side=tk.LEFT)
         entries.append(entry)
+        entry.insert(0, defaults[i])
 
     # Add a Save button
     save_button = tk.Button(root, text="Save", command=save_settings)
@@ -302,15 +304,15 @@ while True:
     if help_mode:
         cv2.putText(cropped, "q: Quit", (10, 110), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
         cv2.putText(cropped, "s: Open Settings", (10, 145), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
-        cv2.putText(cropped, "esc: Disable piezo feedback", (10, 180), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
-        cv2.putText(cropped, "z: Enable auto Mode", (100, 110), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
-        cv2.putText(cropped, "h: Toggle heat map", (100, 145), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
-        cv2.putText(cropped, "l: Load raster CSV", (100, 180), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
-        cv2.putText(cropped, "?: Toggle these help instructions!", (10, 215), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
+        cv2.putText(cropped, "esc: Disable piezo", (10, 180), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
+        cv2.putText(cropped, "z: Enable Auto Mode", (10, 250), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
+        cv2.putText(cropped, "h: Toggle Heat Map", (10, 285), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
+        cv2.putText(cropped, "l: Load Raster CSV", (10, 315), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
+        cv2.putText(cropped, "?: Toggle Instructions", (10, 215), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
 
     # Auto mode
     if autoMode:
-        cv2.putText(cropped, "AutoConnor Active", (8, 300), font, 1, (0, 0, 255), 1, cv2.LINE_AA)
+        cv2.putText(cropped, "AutoConnor Active", (10, 350), font, 1, (0, 0, 255), 1, cv2.LINE_AA)
         if newShot: #If there is new mot data
             if logFlag > 1: # If you have been on the spot for more than one shot
                 if MOTCounts < threshold: # If the counts are below threshold
