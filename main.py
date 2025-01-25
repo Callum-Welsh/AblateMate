@@ -28,6 +28,7 @@ threshold = 190000 #MOT Count threshold for what is a good/bad spot. I.e if MOT 
 warning_number = 2
 do_move = False
 help_mode = True
+warnMode = False
 
 ##############################################
 # CALIBRATION COEFFICIENTS
@@ -138,7 +139,7 @@ port = '55555'
 context = zmq.Context()
 socket = context.socket(zmq.SUB)
 socket.connect("tcp://localhost:48766")
-socket.subscribe.setsocopt_string(zmq.SUBSCRIBE, "")
+socket.setsockopt_string(zmq.SUBSCRIBE, "")
 ####################################################
 
 
@@ -179,6 +180,8 @@ hover_y = None
 MOTCounts = 0
 logCount = 0
 move_flag =0
+shaker = 0
+shake = False
 
 autoMode = False
 warning = False
@@ -308,12 +311,13 @@ while True:
         cv2.putText(cropped, "esc: Disable piezo", (10, 180), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
         cv2.putText(cropped, "z: Enable Auto Mode", (10, 250), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
         cv2.putText(cropped, "h: Toggle Heat Map", (10, 285), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
-        cv2.putText(cropped, "l: Load Raster CSV", (10, 315), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
+        cv2.putText(cropped, "l: Load Raster CSV", (10, 320), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
+        cv2.putText(cropped, "w: Enable Warning Mode", (10, 355), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
         cv2.putText(cropped, "?: Toggle Instructions", (10, 215), font, 1, (255, 0, 255), 1, cv2.LINE_AA)
 
     # Auto mode
     if autoMode:
-        cv2.putText(cropped, "AutoConnor Active", (10, 350), font, 1, (0, 0, 255), 1, cv2.LINE_AA)
+        cv2.putText(cropped, "AutoConnor Active", (10, 355+35), font, 1, (0, 0, 255), 1, cv2.LINE_AA)
         if newShot: #If there is new mot data
             if logFlag > 1: # If you have been on the spot for more than one shot
                 if MOTCounts < threshold: # If the counts are below threshold
@@ -340,7 +344,19 @@ while True:
             else:
                 warning = 0 #If the spot has moved, turn the warning off
 
-
+    if warnMode:
+        cv2.putText(cropped, "Warning Mode Active", (10, 355+35), font, 1, (0, 255, 255), 1, cv2.LINE_AA)
+        if newShot: #If there is new mot data
+            if logFlag > 1: # If you have been on the spot for more than one shot
+                if MOTCounts < threshold: # If the counts are below threshold
+                    if warning < warning_number: # If there is no warning flag
+                        warning +=1 # Set the warning flag to true
+                    else:
+                        shake = True
+                else:
+                    warning = 0 # If you are above threshold, turn the warning off
+            else:
+                warning = 0 #If the spot has moved, turn the warning off
 
     # Draw current destination
     if dest_x is not None:
@@ -437,6 +453,12 @@ while True:
             autoMode = False
         else:
             autoMode = True
+
+    elif key ==ord('w'):
+        if warnMode == True:
+            warnMode = False
+        else:
+            warnMode = True
     
     #If you push h, activate heat map mode
     elif key ==ord('h'):
@@ -470,6 +492,7 @@ while True:
         csv_y = None
         csv_dur = None
         autoMode = False
+        warnMode = False
 
 ##############################################################
     # Handle piezo movement
@@ -479,6 +502,7 @@ while True:
         dest_x is not None
         and target_x is not None
         and time.monotonic() - last_move > 0.1
+        and shake == False
     ):
         dx = dest_x - target_x
         dy = dest_y - target_y
@@ -509,7 +533,7 @@ while True:
                     plot_img = convert_plot_for_CV(mot_grid/shot_grid)
 
 #Else, if the piezo target isn't set
-    elif target_x is not None:
+    elif target_x is not None and not shake:
         #If there was a new shot, log where the target is
         if newShot:
                 logFlag = logFlag + 1 #increase the log flag by one
@@ -521,6 +545,26 @@ while True:
                 #If heat map mode is on, update the plot
                 if heat_map_mode:
                     plot_img = convert_plot_for_CV(mot_grid/shot_grid)
+
+    elif shake and time.monotonic() - last_move > 0.1:
+        shaker = shaker + 1
+        if shaker == 1:
+            piezo.set_v(1, 1046.5)
+            piezo.move_by(1, 300)
+        if shaker == 2:
+            piezo.set_v(1, 1480)
+            piezo.move_by(1, -300)
+        if shaker == 3:
+            piezo.set_v(1, 1046.5)
+            piezo.move_by(1, -300)
+        else:
+            piezo.set_v(1, 1480)
+            piezo.move_by(1, -300)
+            piezo.set_v(1, 1000)
+            shaker = 0
+            shake = False
+    
+        
 
     # Update target from CSV
     if csv_x is not None and time.monotonic() - last_csv > csv_dur[csv_idx] and not autoMode:
@@ -546,3 +590,4 @@ while True:
 #Gracefully terminate the program upopn breaking from the running loop
 vid.release()
 cv2.destroyAllWindows()
+
